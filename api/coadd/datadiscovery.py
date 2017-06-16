@@ -32,7 +32,8 @@ class DataDiscovery:
         excludes = ["Y3A1_COADD_TEST_123", "Y3A1_COADD_TEST_123_t025", "Y3A1_COADD_TEST_123_t050",
                     "Y3A1_COADD_TEST_123_t100", "Y3A1_COADD_TEST_DEEP", "Y3A1_COADD_TEST_11"]
 
-        patterns = ["tag like 'Y3A1_COADD_TEST%'", "tag='Y3A1_COADD'"]
+        patterns = ["tag like 'Y3A1_COADD_TEST%'", "tag='Y3A1_COADD'", "tag='Y3A1_COADD_DEEP'", "tag='Y3A2_COADD'",
+                    "tag='Y3A2'"]
 
         for pattern in patterns:
             print ("--------------------------------------")
@@ -44,6 +45,8 @@ class DataDiscovery:
             rows = self.fetchall_dict(sql)
 
             print ("Tags available: [ %s ]" % len(rows))
+            for row in rows:
+                print("Tag Name: %s" % row.get('TAG'))
 
             for row in rows:
                 print("--------------------------------------")
@@ -121,7 +124,8 @@ class DataDiscovery:
                             count_fail = count_fail + 1
 
                     print(
-                        "Tiles Total [%s] Created [ %s ] Updated [ %s ] Fail [ %s ]" % (count, count_created, count_updated, count_fail))
+                        "Tiles Total [%s] Created [ %s ] Updated [ %s ] Fail [ %s ]" % (
+                            count, count_created, count_updated, count_fail))
 
                 else:
                     print("Tag: %s [ Ignored ]" % tag)
@@ -154,13 +158,16 @@ class DataDiscovery:
             #        "WHERE d.id=f.desfile_id AND d.pfw_attempt_id = p.id AND t.pfw_attempt_id = p.id "
             #        "AND t.tag='" + tag + "' AND f.filename like '%.ptif' AND ROWNUM < 5 ORDER by unitname")
 
-            sql =("SELECT m.tilename, f.path as archive_path, m.filename, t.created_date FROM proctag t, file_archive_info f, miscfile m "
-                "WHERE t.pfw_attempt_id = m.pfw_attempt_id AND t.tag='"+ tag +"' AND m.filetype='coadd_ptif' "
-                "AND f.filename=m.filename")
+            sql = (
+                "SELECT m.tilename, f.path as archive_path, m.filename, t.created_date FROM proctag t, file_archive_info f, miscfile m "
+                "WHERE t.pfw_attempt_id = m.pfw_attempt_id AND t.tag='" + tag + "' AND m.filetype='coadd_ptif' "
+                                                                                "AND f.filename=m.filename")
 
             if last_date:
-                datetime = last_date.split('.')[0]
-                sql = sql + " t.created_date >= TO_DATE('"+ datetime +"', 'YYYY-MM-DD HH24:MI:SS') "
+                # datetime = last_date.split('.')[0]
+                # sql = sql + " AND t.created_date >= TO_DATE('" + datetime + "', 'YYYY-MM-DD HH24:MI:SS') "
+                sql = sql + " AND t.created_date >= TO_DATE('%s', 'YYYY-MM-DD HH24:MI:SS') " % last_date.strftime('%Y-%m-%d %H:%M:%S')
+
 
             sql = sql + " ORDER by t.created_date, m.tilename"
 
@@ -219,46 +226,45 @@ class DataDiscovery:
             return None
 
 
-    # def assocition_tag_tile(self):
-    #         """
-    #         Usadado para importar um csv com as tiles que fazem parte do release Y1A1 essa funcao faz a assiciacao da
-    #         tile com o tag usando o tilename e tag_id
-    #         """
-    #     print('assocition_tag_tile')
-    #
-    #     count_created = 0
-    #     count_updated = 0
-    #     count_fail = 0
-    #
-    #     import csv
-    #     with open("/tmp/test.csv") as csvfile:
-    #         reader = csv.DictReader(csvfile, fieldnames=['tag', 'tilename', 'run', 'image_src_ptif'])
-    #
-    #         for row in reader:
-    #             print("%s - %s" % (row['tag'], row['tilename']))
-    #             tag = None
-    #             if tag != row['tag']:
-    #                 tag = Tag.objects.select_related().get(pk=row['tag'])
-    #
-    #             try:
-    #                 tile = Tile.objects.select_related().get(tli_tilename__icontains=row['tilename'])
-    #
-    #                 dataset, created = Dataset.objects.update_or_create(
-    #                     tag=tag,
-    #                     tile=tile,
-    #                     defaults={
-    #                         'image_src_ptif': row['image_src_ptif']
-    #                     }
-    #                 )
-    #
-    #                 if created:
-    #                     count_created = count_created + 1
-    #                 else:
-    #                     count_updated = count_updated + 1
-    #
-    #             except Tile.DoesNotExist:
-    #                 count_fail = count_fail + 1
-
+            # def assocition_tag_tile(self):
+            #         """
+            #         Usadado para importar um csv com as tiles que fazem parte do release Y1A1 essa funcao faz a assiciacao da
+            #         tile com o tag usando o tilename e tag_id
+            #         """
+            #     print('assocition_tag_tile')
+            #
+            #     count_created = 0
+            #     count_updated = 0
+            #     count_fail = 0
+            #
+            #     import csv
+            #     with open("/tmp/test.csv") as csvfile:
+            #         reader = csv.DictReader(csvfile, fieldnames=['tag', 'tilename', 'run', 'image_src_ptif'])
+            #
+            #         for row in reader:
+            #             print("%s - %s" % (row['tag'], row['tilename']))
+            #             tag = None
+            #             if tag != row['tag']:
+            #                 tag = Tag.objects.select_related().get(pk=row['tag'])
+            #
+            #             try:
+            #                 tile = Tile.objects.select_related().get(tli_tilename__icontains=row['tilename'])
+            #
+            #                 dataset, created = Dataset.objects.update_or_create(
+            #                     tag=tag,
+            #                     tile=tile,
+            #                     defaults={
+            #                         'image_src_ptif': row['image_src_ptif']
+            #                     }
+            #                 )
+            #
+            #                 if created:
+            #                     count_created = count_created + 1
+            #                 else:
+            #                     count_updated = count_updated + 1
+            #
+            #             except Tile.DoesNotExist:
+            #                 count_fail = count_fail + 1
 
 
 if __name__ == '__main__':
@@ -268,5 +274,3 @@ if __name__ == '__main__':
 
     # from coadd.datadiscovery import DataDiscovery
     # DataDiscovery().assocition_tag_tile()
-
-

@@ -14,14 +14,14 @@ Ext.define('Target.view.wizard.Wizard', {
         'Target.view.association.Panel',
         'Target.view.settings.Columns',
         'Target.view.settings.Permission',
+        'Target.view.settings.SystemMembers',
+        'Target.view.settings.Cutout',
         'Ext.layout.container.Card'
     ],
 
     controller: 'wizard',
 
     viewModel: 'wizard',
-
-    //layout: 'card',
 
     defaultListenerScope: true,
 
@@ -64,6 +64,19 @@ Ext.define('Target.view.wizard.Wizard', {
         },
         {
             id: 'card-3',
+            xtype: 'targets-cutout',
+            title: 'Cutouts',
+            iconCls: 'x-fa fa-picture-o'
+        },
+        {
+            id: 'card-4',
+            xtype: 'targets-system-members',
+            title: 'System Members',
+            iconCls: 'x-fa fa-dot-circle-o',
+            disabled: true
+        },
+        {
+            id: 'card-5',
             xtype: 'targets-permission',
             title: 'Permission',
             iconCls: 'x-fa fa-lock',
@@ -128,16 +141,23 @@ Ext.define('Target.view.wizard.Wizard', {
         currentCatalog = vm.get('currentCatalog');
 
         // Configuracoes habilitadas se o usuario for o proprietario do catalogo
-        if ((currentCatalog.get('id') > 0) && (currentCatalog.get('is_owner'))) {
-            me.down('targets-association').enable();
-            me.down('targets-permission').enable();
+        // if ((currentCatalog.get('id') > 0) && (currentCatalog.get('is_owner'))) {
+        me.down('targets-association').enable();
+        me.down('targets-permission').enable();
+        // me.down('targets-system-members').enable();
 
+        // } else {
+        //     me.down('targets-association').disable();
+        //     me.down('targets-permission').disable();
+        //     me.down('targets-system-members').disable();
+
+        // }
+
+        if (currentCatalog.get('pcl_is_system')) {
+            me.down('targets-system-members').enable();
         } else {
-            me.down('targets-association').disable();
-            me.down('targets-permission').disable();
-
+            me.down('targets-system-members').disable();
         }
-
     }
 
 });

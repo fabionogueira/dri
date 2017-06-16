@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import logging
+from django.core.exceptions import ObjectDoesNotExist
 
 import django_filters
 from rest_framework import filters
@@ -24,11 +25,13 @@ class ProductFilter(django_filters.FilterSet):
     group = django_filters.CharFilter(method='filter_group')
     group_id = django_filters.CharFilter(method='filter_group_id')
     band = django_filters.CharFilter(method='filter_band')
+    class_name = django_filters.CharFilter(method='filter_class_name')
+    process = django_filters.CharFilter(method='filter_process')
 
     class Meta:
         model = Product
-        fields = ['id', 'prd_name', 'prd_display_name', 'prd_class', 'prd_filter', 'band', 'group', 'group_id', 'releases',
-                  'tags', ]
+        fields = ['id', 'prd_name', 'prd_display_name', 'prd_class', 'prd_filter', 'band', 'group', 'group_id',
+                  'releases', 'tags', 'class_name', 'process',]
 
     def filter_group(self, queryset, value):
         return queryset.filter(prd_class__pcl_group__pgr_name=str(value))
@@ -38,6 +41,12 @@ class ProductFilter(django_filters.FilterSet):
 
     def filter_band(self, queryset, value):
         return queryset.filter(prd_filter__filter=str(value))
+
+    def filter_class_name(self, queryset, value):
+        return queryset.filter(prd_class__pcl_name=str(value))
+
+    def filter_process(self, queryset, value):
+        return queryset.filter(prd_process_id__epr_original_id=str(value))
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -89,9 +98,9 @@ class CatalogViewSet(viewsets.ModelViewSet, mixins.UpdateModelMixin):
     @list_route()
     def get_class_tree_by_group(self, request):
         """
-            Este metodo retorna uma tree, com todos os produtos de um grupo. estes produtos estão
+            Este metodo retorna uma tree, com todos os produtos de um grupo. estes produtos estÃ£o
             agrupados por suas classes.
-            é necessario o parametro group que é o internal name da tabela Group
+            Ã© necessario o parametro group que Ã© o internal name da tabela Group
             ex: catalog/get_class_tree_by_group/group='targets'
         """
         group = request.query_params.get('group', None)
@@ -100,17 +109,26 @@ class CatalogViewSet(viewsets.ModelViewSet, mixins.UpdateModelMixin):
             # TODO retornar execpt que o group e obrigatorio
             return Response({
                 'success': False,
-                'msg': 'Necessário passar o parametro group.'
+                'msg': 'NecessÃ¡rio passar o parametro group.'
             })
 
         # Usando Filter_Queryset e aplicado os filtros listados no filterbackend
         queryset = self.filter_queryset(self.get_queryset())
 
-
         # Search
         prd_display_name = request.query_params.get('search', None)
         if prd_display_name:
             queryset = self.queryset.filter(prd_display_name__icontains=prd_display_name)
+
+        # Bookmark
+        bookmarked = request.query_params.get('bookmark', None)
+        if bookmarked:
+            # Recuperar todos os catalogos marcados como favorito pelo usuario logado
+            bookmarkeds = BookmarkProduct.objects.filter(owner=request.user.pk)
+            if bookmarkeds.count() > 0:
+                ids = bookmarkeds.values_list('product', flat=True)
+                queryset = self.queryset.filter(pk__in=ids)
+
 
         # Esse dicionario vai receber os nos principais que sao as classes.
         classes = dict()
@@ -138,17 +156,26 @@ class CatalogViewSet(viewsets.ModelViewSet, mixins.UpdateModelMixin):
             if row.prd_owner and request.user.pk == row.prd_owner.pk:
                 editable = True
 
-
             # Adiciono os atributos que serao usados pela interface
             # esse dict vai ser um no filho de um dos nos de classe.
             catalog.update({
                 "text": row.prd_display_name,
                 "leaf": True,
                 "iconCls": "no-icon",
-                "starred": False,
-                "markable": True,
+                "bookmark": None,
                 "editable": editable
             })
+
+            try:
+                bookmark = BookmarkProduct.objects.get(product=row.id, owner=request.user.pk)
+                catalog.update({
+                    "bookmark": bookmark.pk,
+                    "iconCls": "x-fa fa-star color-icon-starred",
+                    "starred": True
+                })
+
+            except ObjectDoesNotExist:
+                pass
 
             # pega o no da classe e adiciona este no como filho.
             dclass = classes.get(class_name)
@@ -194,7 +221,6 @@ class ProductContentViewSet(viewsets.ModelViewSet):
             if ProductContentSetting.objects.filter(pcs_setting=pca_setting).count():
                 flag_content_settings = True
 
-
         qdisplay_name = request.query_params.get('display_name', None)
 
         queryset = ProductContent.objects.select_related().filter(pcn_product_id=pcn_product_id)
@@ -214,7 +240,6 @@ class ProductContentViewSet(viewsets.ModelViewSet):
             if flag_content_settings:
                 # Recupera a configuracao feita para uma coluna em usando como filtro uma configuracao.
                 contentSetting = row.productcontentsetting_set.all().filter(pcs_setting=pca_setting).first()
-
 
             association = row.productcontentassociation_set.first()
 
@@ -239,7 +264,6 @@ class ProductContentViewSet(viewsets.ModelViewSet):
 
             if flag_content_settings:
                 content.update({'is_visible': False})
-
 
             if association is not None:
 
@@ -293,6 +317,15 @@ class ProductContentViewSet(viewsets.ModelViewSet):
         return Response(ordered)
 
 
+class ProductRelatedViewSet(viewsets.ModelViewSet):
+    """
+
+    """
+    queryset = ProductRelated.objects.select_related().all()
+
+    serializer_class = ProductRelatedSerializer
+
+    filter_fields = ('prl_product', 'prl_related', 'prl_cross_identification')
 
 
 class ProductContentAssociationViewSet(viewsets.ModelViewSet):
@@ -321,7 +354,6 @@ class ProductAssociationViewSet(viewsets.ModelViewSet):
     ordering_fields = ('id',)
 
 
-
 class MapViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows Map to be viewed or edited
@@ -335,6 +367,7 @@ class MapViewSet(viewsets.ModelViewSet):
     search_fields = ('prd_name', 'prd_display_name', 'prd_class')
 
     ordering_fields = ('id',)
+
 
 class MaskViewSet(viewsets.ModelViewSet):
     """
@@ -353,9 +386,9 @@ class MaskViewSet(viewsets.ModelViewSet):
 
 class AllProductViewSet(viewsets.ModelViewSet):
     """
-    
+
     """
-    queryset = Product.objects.select_related().filter(prd_process_id__isnull = False)
+    queryset = Product.objects.select_related().filter(prd_process_id__isnull=False)
 
     serializer_class = AllProductsSerializer
 
@@ -407,7 +440,6 @@ class CurrentSettingViewSet(viewsets.ModelViewSet):
     ordering_fields = ('id', 'cst_display_name',)
 
 
-
 class ProductContentSettingViewSet(viewsets.ModelViewSet):
     """
 
@@ -420,13 +452,16 @@ class ProductContentSettingViewSet(viewsets.ModelViewSet):
 
     ordering_fields = ('id', 'order',)
 
-class CutOutJobViewSet(viewsets.ModelViewSet):
+
+class CutoutJobViewSet(viewsets.ModelViewSet):
     """
 
     """
-    queryset = CutOutJob.objects.select_related().all()
+    queryset = CutOutJob.objects.all()
 
-    serializer_class = CutOutJobSerializer
+    serializer_class = CutoutJobSerializer
+
+    filter_fields = ('id', 'cjb_product', 'cjb_display_name', 'cjb_status')
 
     ordering_fields = ('id',)
 
@@ -449,7 +484,7 @@ class PermissionWorkgroupUserFilter(django_filters.FilterSet):
 
     class Meta:
         model = WorkgroupUser
-        fields = ['id', 'wgu_workgroup', 'wgu_user', 'product',]
+        fields = ['id', 'wgu_workgroup', 'wgu_user', 'product', ]
 
     def filter_product(self, queryset, value):
         workgroups = Workgroup.objects.filter(permission__prm_product=int(value))
@@ -490,6 +525,7 @@ class WorkgroupViewSet(viewsets.ModelViewSet):
 
     serializer_class = WorkgroupSerializer
 
+
 class WorkgroupUserViewSet(viewsets.ModelViewSet):
     """
 
@@ -499,3 +535,44 @@ class WorkgroupUserViewSet(viewsets.ModelViewSet):
     serializer_class = WorkgroupUserSerializer
 
     filter_fields = ('wgu_workgroup',)
+
+
+# ---------------------------------- Filtros ----------------------------------
+class FiltersetViewSet(viewsets.ModelViewSet):
+    """
+
+    """
+    queryset = Filterset.objects.select_related().all()
+
+    serializer_class = FiltersetSerializer
+
+    filter_fields = ('id', 'product', 'owner', 'fst_name')
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+
+class FilterConditionViewSet(viewsets.ModelViewSet):
+    """
+
+    """
+    queryset = FilterCondition.objects.select_related().all()
+
+    serializer_class = FilterConditionSerializer
+
+    filter_fields = ('id', 'filterset', 'fcd_property', 'fcd_operation', 'fcd_value')
+
+# ---------------------------------- Bookmark ----------------------------------
+
+class BookmarkedViewSet(viewsets.ModelViewSet):
+    """
+
+    """
+    queryset = BookmarkProduct.objects.select_related().all()
+
+    serializer_class = BookmarkedSerializer
+
+    filter_fields = ('id', 'product', 'owner', 'is_starred')
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)

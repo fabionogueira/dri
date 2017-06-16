@@ -1,0 +1,9 @@
+/** Ocultar o botao de Clipboard que nao funciona na nossa aplicacao */
+.leaflet-control-wcs-clipboard {
+    display: none;
+}
+
+/** Marker utilizado para highlight objetos de catalogo */
+.visiomatic-marker-position {
+    color: #C8ED00;
+}

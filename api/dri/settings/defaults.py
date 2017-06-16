@@ -26,16 +26,26 @@ DEBUG = False
 
 ALLOWED_HOSTS = []
 
+USE_OAUTH = False
 
 # Application definition
 
 BASE_APPS = [
     'django.contrib.admin',
+    'django.contrib.sites',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+]
+
+AUTH_APPS = [
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.facebook',
+    'allauth.socialaccount.providers.google',
 ]
 
 THIRD_PARTY_APPS = [
@@ -44,20 +54,26 @@ THIRD_PARTY_APPS = [
     'corsheaders',
     'django_filters',
     'url_filter',
+    # 'django_nose'
 ]
 
 PROJECT_APPS = [
     'common',
     'coadd',
+    'comment',
     'product_classifier',
     'product_register',
     'product',
     'validation',
     'catalog',
-    'interfaces'
+    'interfaces',
+    'userquery'
 ]
 
-INSTALLED_APPS = BASE_APPS + THIRD_PARTY_APPS + PROJECT_APPS
+if USE_OAUTH:
+    INSTALLED_APPS = BASE_APPS + AUTH_APPS + THIRD_PARTY_APPS + PROJECT_APPS
+else:
+    INSTALLED_APPS = BASE_APPS + THIRD_PARTY_APPS + PROJECT_APPS
 
 MIDDLEWARE_CLASSES = [
     'django.middleware.security.SecurityMiddleware',
@@ -92,7 +108,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dri.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/1.9/ref/settings/#databases
 
@@ -101,7 +116,6 @@ DATABASES = {}
 DATABASE_ROUTERS = ['catalog.router.CatalogRouter']
 
 APPEND_SLASH = False
-
 
 # Password validation
 # https://docs.djangoproject.com/en/1.9/ref/settings/#auth-password-validators
@@ -124,7 +138,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/1.9/topics/i18n/
 
@@ -138,7 +151,6 @@ USE_L10N = True
 
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.9/howto/static-files/
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
@@ -146,9 +158,11 @@ STATIC_URL = '/static/'
 
 AUTHENTICATION_BACKENDS = (
     'common.authentication.NcsaBackend',
-    'django.contrib.auth.backends.ModelBackend'
+    'django.contrib.auth.backends.ModelBackend',
 )
 
+if USE_OAUTH:
+    AUTHENTICATION_BACKENDS += ('allauth.account.auth_backends.AuthenticationBackend',)
 
 REST_FRAMEWORK = {
 
@@ -169,3 +183,15 @@ REST_FRAMEWORK = {
         'rest_framework.filters.OrderingFilter',
     ),
 }
+
+SITE_ID = 1
+
+# Run Test with Django Nose http://django-testing-docs.readthedocs.io/en/latest/coverage.html#coverage-reports
+# Use nose to run all tests
+# TEST_RUNNER = 'django_nose.NoseTestSuiteRunner'
+
+# Tell nose to measure coverage on the 'foo' and 'bar' apps
+# NOSE_ARGS = [
+#     '--with-coverage',
+#     '--cover-package=' + ','.join(PROJECT_APPS),
+# ]

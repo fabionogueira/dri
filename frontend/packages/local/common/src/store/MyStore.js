@@ -28,12 +28,13 @@ Ext.define('common.store.MyStore', {
                     }
 
                 } else {
-                    var error = eOpts.getError();
+                    var error = eOpts.getError(),
+                        response;
 
                     switch (error.status) {
                         case 403:
                             // 403 - Forbidden
-                            var response = JSON.parse(error.response.responseText);
+                            response = JSON.parse(error.response.responseText);
                             Ext.MessageBox.show({
                                 title: error.status + ' - ' + error.statusText,
                                 msg: response.detail,
@@ -54,16 +55,27 @@ Ext.define('common.store.MyStore', {
                             });
 
                             break;
-
-                        default:
+                        case 408:
+                            // 408 - Timeout
+                            response = JSON.parse(error.response.responseText);
                             Ext.MessageBox.show({
-                                header: false,
-                                closable: false,
-                                msg: 'Error ' + error.status + ' - ' + error.statusText,
+                                title: error.status + ' - ' + error.statusText,
+                                msg: 'Maximum execution time exceeded.',
                                 buttons: Ext.MessageBox.OK,
-                                icon: Ext.MessageBox.WARNING,
-                                scope: this
+                                icon: Ext.MessageBox.WARNING
                             });
+
+                            break;
+
+                        // default:
+                        //     Ext.MessageBox.show({
+                        //         header: false,
+                        //         closable: false,
+                        //         msg: 'Error ' + error.status + ' - ' + error.statusText,
+                        //         buttons: Ext.MessageBox.OK,
+                        //         icon: Ext.MessageBox.WARNING,
+                        //         scope: this
+                        //     });
                     }
                 }
             }

@@ -21,6 +21,14 @@ Ext.define('Target.view.wizard.WizardController', {
                 activate: 'onActiveColumns',
                 finish: 'finishWizard'
             },
+            'targets-cutout': {
+                activate: 'onActiveCutout',
+                finish: 'finishWizard'
+            },
+            'targets-system-members': {
+                activate: 'onActiveSystemMembers',
+                finish: 'finishWizard'
+            },
             'targets-permission': {
                 activate: 'onActivePermission',
                 finish: 'finishWizard'
@@ -63,6 +71,29 @@ Ext.define('Target.view.wizard.WizardController', {
             association = view.down('targets-association');
 
         association.setCatalog(currentCatalog);
+
+    },
+
+    onActiveCutout: function () {
+        var me = this,
+            vm = me.getViewModel(),
+            currentCatalog = vm.get('currentCatalog'),
+            currentSetting = vm.get('currentSetting'),
+            view = me.getView(),
+            cutouts = view.down('targets-cutout');
+
+        cutouts.setCurrentCatalog(currentCatalog);
+        cutouts.setCurrentSetting(currentSetting);
+    },
+
+    onActiveSystemMembers: function () {
+        var me = this,
+            vm = me.getViewModel(),
+            currentCatalog = vm.get('currentCatalog'),
+            view = me.getView(),
+            system = view.down('targets-system-members');
+
+        system.setCurrentCatalog(currentCatalog);
 
     },
 

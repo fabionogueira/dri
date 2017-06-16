@@ -120,6 +120,9 @@ class ProductContent(models.Model):
         Product, on_delete=models.CASCADE, verbose_name='Product')
     pcn_column_name = models.CharField(
         max_length=256, verbose_name='Column Name')
+    pcn_ucd = models.CharField(
+        max_length=128, verbose_name='UCD', help_text='The standard unified content descriptor.', null=True, blank=True
+    )
 
     def __str__(self):
         return self.pcn_column_name
@@ -184,39 +187,68 @@ class ProductContentSetting(models.Model):
     )
 
 
+class ProductRelated(models.Model):
+    prl_product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, verbose_name='Product'
+    )
+    prl_related = models.ForeignKey(
+        Product, related_name="relateds", on_delete=models.CASCADE, verbose_name='Related Product'
+    )
+    prl_cross_identification = models.ForeignKey(
+        ProductContent, on_delete=models.CASCADE, verbose_name='Cross Identification', default=None,
+        null=True, blank=True, help_text="Foreign key between the product and the related product",
+    )
+
+    def __str__(self):
+        return str(self.pk)
+
+
+# ------------------------------ Cutouts ------------------------------
 class CutOutJob(models.Model):
     status_job = (
-        ('st', 'start'),
-        ('bs', 'beforeSubmit'),
-        ('rn', 'running'),
-        ('ok', 'done'),
+        # Jobs que ainda nao foram enviados
+        ('st', 'Start'),
+        # Envio do job para API
+        ('bs', 'Submit Job'),
+        # Cutout Job enviado e aguardando termino na API
+        ('rn', 'Running'),
+        # Cutout Job Concluido
+        ('ok', 'Done'),
+        # Erro no nosso lado
+        ('er', 'Error'),
+        # Erro com o job no lado da Api.
+        ('je', 'Job Error'),
+        # Marcado como Deletado
+        ('dl', 'Delete'),
     )
 
     cjb_product = models.ForeignKey(
-        Product, on_delete=models.CASCADE, verbose_name='Product', default=None
-    )
+        Product, on_delete=models.CASCADE, verbose_name='Product')
 
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE, default=get_current_user, verbose_name='Owner')
 
     cjb_display_name = models.CharField(
-        max_length=20, verbose_name='Name')
+        max_length=40, verbose_name='Name')
 
     cjb_xsize = models.CharField(
-        max_length=5, verbose_name='Xsize')
+        max_length=5, verbose_name='Xsize', help_text='xsize in arcmin, default is 1.0', default='1.0')
 
     cjb_ysize = models.CharField(
-        max_length=5, verbose_name='ysize')
+        max_length=5, verbose_name='ysize', help_text='ysize in arcmin, default is 1.0', default='1.0')
 
     cjb_job_type = models.CharField(
-        max_length=10, verbose_name='JobType')
+        max_length=10, verbose_name='Job Type', choices=(('coadd', 'Coadd Images'), ('single', 'Single Epoch')))
+
+    cjb_tag = models.CharField(
+        max_length=60, verbose_name='Release Tag', null=True, blank=True)
 
     cjb_band = models.CharField(
-        max_length=10, verbose_name='band', null=True)
+        max_length=20, verbose_name='Filters', null=True, blank=True)
 
-    cjb_Blacklist = models.CharField(
-        max_length=10, verbose_name='Blacklist', null=True)
+    cjb_Blacklist = models.BooleanField(
+        verbose_name='Blacklist', default=False, help_text='Exclude blacklisted ccds')
 
     cjb_status = models.CharField(
         max_length=2,
@@ -226,31 +258,65 @@ class CutOutJob(models.Model):
     )
 
     cjb_job_id = models.CharField(
-        max_length=1024, verbose_name='Job ID')
+        max_length=1024, verbose_name='Job ID', null=True, blank=True)
+
+    # Fields Referentes as labels que serao aplicadas ao cutout
+    cjb_label_position = models.CharField(
+        max_length=10, verbose_name='Label Position', choices=(('inside', 'Inside'), ('outside', 'Outside')),
+        null=True, blank=True,
+        help_text="This field determines the position of the labels, 'inside' for labels on the image and 'outside' for labels outside the image.")
+
+    cjb_label_properties = models.CharField(
+        max_length=1024, verbose_name='Label Properties', null=True, blank=True,
+        help_text="A list with the ids of the properties that will be used as a label. (Id = ProductContent.pk)")
+
+    cjb_label_colors = models.CharField(
+        max_length=6, verbose_name='Label Font Colors', null=True, blank=True)
+
+    cjb_label_font_size = models.PositiveIntegerField(
+        verbose_name='Label Font Size', default=10, null=True, blank=True, help_text='Font size in px.')
+
+    def __str__(self):
+        return str(self.cjb_display_name)
 
 
-class CutOut(models.Model):
+class Cutout(models.Model):
     cjb_cutout_job = models.ForeignKey(
-        CutOutJob, on_delete=models.CASCADE, verbose_name='CutOutJob', default=None
-    )
-
-    ctt_url = models.CharField(
-        max_length=20, verbose_name='url')
-
+        CutOutJob, on_delete=models.CASCADE, verbose_name='Cutout Job', default=None)
     ctt_object_id = models.CharField(
-        max_length=5, verbose_name='Object ID')
-
-    ctt_ra = models.CharField(
-        max_length=5, verbose_name='ra')
-
-    ctt_dec = models.CharField(
-        max_length=5, verbose_name='Dec')
-
-    ctt_tipo = models.CharField(
-        max_length=5, verbose_name='Tipo')
-
+        max_length=5, verbose_name='Object ID', null=True, blank=True,
+        help_text='The association is used to know which column will be considered as id.')
+    ctt_object_ra = models.CharField(
+        max_length=5, verbose_name='RA', null=True, blank=True,
+        help_text='RA in degrees, the association will be used to identify the column')
+    ctt_object_dec = models.CharField(
+        max_length=5, verbose_name='Dec', null=True, blank=True,
+        help_text='Dec in degrees, the association will be used to identify the column')
     ctt_filter = models.ForeignKey(
         'common.Filter', verbose_name='Filter', null=True, blank=True, default=None)
+    ctt_thumbname = models.CharField(
+        max_length=255, verbose_name='Thumbname', null=True, blank=True, default=None)
+    ctt_file_path = models.CharField(
+        max_length=4096, verbose_name='File Path', null=True, blank=True, default=None)
+    ctt_file_name = models.CharField(
+        max_length=255, verbose_name='Filename ', null=True, blank=True, default=None)
+    ctt_file_type = models.CharField(
+        max_length=5, verbose_name='File Extension', null=True, blank=True, default=None)
+    ctt_file_size = models.PositiveIntegerField(
+        verbose_name='File Size', null=True, blank=True, default=None, help_text='File Size in bytes')
+    ctt_download_start_time = models.DateTimeField(
+        auto_now_add=True, null=True, blank=True, verbose_name='Download Start')
+    ctt_download_finish_time = models.DateTimeField(
+        auto_now_add=False, null=True, blank=True, verbose_name='Download finish')
+
+    class Meta:
+        unique_together = ('cjb_cutout_job', 'ctt_file_name')
+
+    def __str__(self):
+        return str(self.pk)
+
+        # ctt_original_url = models.CharField(
+        #     max_length=5, verbose_name='Url to download the file on the cutouts server')
 
 
 # ------------------------------ Permissoes por Produtos ------------------------------
@@ -282,3 +348,64 @@ class Permission(models.Model):
     prm_workgroup = models.ForeignKey(
         Workgroup,
         on_delete=models.CASCADE, verbose_name='Workgroup', null=True, blank=True)
+
+
+# ---------------------------------- Filtros ----------------------------------
+# Filtros que podem ser aplicados a um produto
+
+class Filterset(models.Model):
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, verbose_name='Product')
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE, default=get_current_user, verbose_name='Owner')
+
+    fst_name = models.CharField(
+        max_length=60, verbose_name='Filterset', help_text='Filterset Display Name')
+
+    def __str__(self):
+        return str(self.fst_name)
+
+
+class FilterCondition(models.Model):
+    filterset = models.ForeignKey(
+        Filterset, on_delete=models.CASCADE, verbose_name='Filterset')
+
+    fcd_property = models.ForeignKey(
+        ProductContent, on_delete=models.CASCADE, verbose_name='Property', null=True, blank=True, default=None
+    )
+
+    fcd_property_name = models.CharField(
+        max_length=60, verbose_name='Operator', null=True, blank=True, default=None,
+        help_text='Name of the property like this in the database'
+    )
+
+    fcd_operation = models.CharField(
+        max_length=10, verbose_name='Operator')
+
+    fcd_value = models.CharField(
+        max_length=10, verbose_name='Value')
+
+    def __str__(self):
+        return str("%s %s %s" % (self.fcd_property, self.fcd_operation, self.fcd_value))
+
+
+# ---------------------------------- Bookmark ----------------------------------
+
+class BookmarkProduct(models.Model):
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, verbose_name='Product')
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE, default=get_current_user, verbose_name='Owner')
+
+    is_starred = models.BooleanField(
+        default=False, verbose_name='Is Starred')
+
+    class Meta:
+        unique_together = ('product', 'owner')
+
+    def __str__(self):
+        return str(self.pk)

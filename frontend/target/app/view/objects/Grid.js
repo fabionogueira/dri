@@ -18,9 +18,6 @@ Ext.define('Target.view.objects.Grid', {
     * Evento disparado depois que a grid de objetos e reconfigurada
     * @param {Portal.view.target.Objects} [this] this panel
     */
-
-    scrollable: true,
-
     config: {
         ready: false,
         columnRating: true,
@@ -34,12 +31,15 @@ Ext.define('Target.view.objects.Grid', {
         var me = this;
 
         Ext.apply(this, {
+            enableLocking: true,
+            syncRowHeight: true,
             columns: [
                 Ext.create('Ext.grid.RowNumberer'),
-                {text: 'Placeholder',  dataIndex: '', hidden: true}
+                {text: '',  dataIndex: '', width: 50},
+                {text: '',  dataIndex: '', flex: true}
             ],
             viewConfig: {
-                stripeRows: false,
+                stripeRows: true,
                 markDirty: false,
                 getRowClass: function (record) {
                     return record.get('_meta_reject') === true ? 'rejected-row' : '';
@@ -50,31 +50,18 @@ Ext.define('Target.view.objects.Grid', {
         me.callParent(arguments);
     },
 
-    showHideTilename: function (visible) {
-
-        var me = this,
-            headerCt = me.headerCt,
-            columns = headerCt ? headerCt.items.getRange() : objectsGrid.columns;
-
-        for (var i in columns) {
-            if (columns[i].dataIndex == 'tilename') {
-
-                columns[i].setVisible(visible);
-            }
-        }
-
-    },
-
     reconfigureGrid: function (storeColumns) {
         // console.log('Targets Objects - reconfigureGrid(%o)', storeColumns);
 
         var me = this,
-            columns = [];
+            columns = [],
+            flag;
 
         // Coluna RowNunber
         columns.push(Ext.create('Ext.grid.RowNumberer', {
             width: 50,
-            resizable: true
+            resizable: true,
+            locked: true
         }));
 
         if (storeColumns.count() > 0) {
@@ -92,14 +79,23 @@ Ext.define('Target.view.objects.Grid', {
 
                     var column = {
                         text: me.createColumnText(record),
-                        dataIndex: record.get('column_name'),
+                        dataIndex: record.get('column_name').toLowerCase(),
                         tooltip: me.createColumnTooltip(record),
-                        renderer: me.formatNumber
+                        renderer: me.formatNumber,
+                        lockable: true
                     };
 
                     // if (type != undefined) {
                     //     column.filter = {type: type, itemDefaults: {emptyText: 'Search for...'}};
                     // }
+
+                    // Se tiver a coluna id habilita as colunas de rating e reject
+                    if (record.get('ucd') == 'meta.id;meta.main') {
+                        column.locked = true;
+                        column.lockable = true;
+                        column.renderer = null;
+                        flag = true;
+                    }
 
                     //  Tratamento Tilename default hidden
                     if (record.get('column_name').toLowerCase() == 'tilename') {
@@ -117,6 +113,8 @@ Ext.define('Target.view.objects.Grid', {
                         column.xtype = 'numbercolumn';
                         column.format = '0.000';
                         column.renderer = null;
+                        column.locked = true;
+                        column.lockable = true;
                     }
 
                     // Coluna Radius
@@ -125,12 +123,8 @@ Ext.define('Target.view.objects.Grid', {
                         column.xtype = 'numbercolumn';
                         column.format = '0.000';
                         column.renderer = null;
-                    }
-
-
-                    // Se tiver a coluna id habilita as colunas de rating e reject
-                    if (record.get('ucd') == 'meta.id;meta.main') {
-                        flag = true;
+                        // column.locked = true;
+                        column.lockable = true;
                     }
 
                     columns.push(column);
@@ -139,7 +133,7 @@ Ext.define('Target.view.objects.Grid', {
             },this);
 
             // Coluna Rating
-            if ((me.getColumnRating()) && (flag == true)) {
+            if ((me.getColumnRating()) && (flag === true)) {
 
                 columns.push({
                     xtype: 'widgetcolumn',
@@ -152,6 +146,7 @@ Ext.define('Target.view.objects.Grid', {
                         xtype: 'rating',
                         minimum: 0,
                         // overStyle: 'color: orange;'
+                        scale: '115%',
                         selectedStyle: 'color: rgb(96, 169, 23);',
                         style: {
                             'color': '#777777'
@@ -168,7 +163,7 @@ Ext.define('Target.view.objects.Grid', {
                 });
             }
             // Coluna Reject
-            if ((me.getColumnAccept()) && (flag == true)) {
+            if ((me.getColumnAccept()) && (flag === true)) {
                 columns.push({
                     xtype: 'checkcolumn',
                     text: 'Reject',
@@ -179,14 +174,15 @@ Ext.define('Target.view.objects.Grid', {
                 });
             }
             // Coluna Comments
-            if ((me.getColumnComments()) && (flag == true)) {
+            if ((me.getColumnComments()) && (flag === true)) {
                 columns.push({
-                    text: '',
-                    dataIndex: 'comments',
+                    text: 'Comments',
+                    dataIndex: '_meta_comments',
                     tooltip: 'Comments',
                     align: 'center',
                     flex: 1,
                     sortable: false,
+                    minWidth: 80,
                     renderer: function (value, metadata, record) {
                         var newValue = '';
                         if (value > 0) {
@@ -277,18 +273,18 @@ Ext.define('Target.view.objects.Grid', {
     },
 
     formatNumber: function (value) {
-
         var precision = 3,
             aValue, decimal;
 
         if (typeof(value) === 'number') {
 
             if (value > 10000) {
-                // Se for maior que 10.000 usar notacao exponencial
-                value = value.toExponential(1);
+                // Se for maior que 10000 e tiver um float usar notacao exponencial
+                if (value.toString().indexOf('.') != -1) {
+                    value = value.toExponential(1);
+                }
 
             } else {
-                // Se for float
                 if (value.toString().indexOf('.') != -1) {
                     aValue = value.toString().split('.');
                     decimal = aValue[1];

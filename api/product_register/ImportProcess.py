@@ -74,7 +74,6 @@ class Import():
         except Site.DoesNotExist:
             return None
 
-
     # =============================< PROCESS >=============================
     def import_process(self, data):
 
@@ -199,18 +198,14 @@ class Import():
 
         if not self.db:
             con = CatalogDB(db=database)
-            self.db = con.wrapper
+            self.db = con.database
 
-
-        # Verifica se a tabela existe
-        if not self.db.table_exists(data.get('schema', None), data.get('table')):
-            raise Exception("Table or view  %s does not exist" % data.get('table'))
-
-        # Recupera o nome da tabela
-        tablename = self.db.get_tablename(data.get('schema', None), data.get('table'))
+        if not self.db.table_exists(data.get('table'), schema=data.get('schema', None)):
+            raise Exception("Table or view  %s.%s does not exist" %
+                            (data.get('schema', None), data.get('table')))
 
         # Recuperar a quantidade de linhas da tabela
-        count = self.db.get_count(tablename)
+        count = self.db.get_count(data.get('table'), schema=data.get('schema', None))
 
         # Recuperar a classe do produto
         cls = self.get_product_class(data.get('class'))
@@ -265,8 +260,6 @@ class Import():
             # Registar as colunas do catalogo
             self.register_catalog_content(product, data, created)
 
-
-
             return True
         else:
             raise Exception(
@@ -298,9 +291,7 @@ class Import():
             ProductContent.objects.filter(pcn_product_id=catalog).delete()
 
         # Recuperar as colunas do catalogo.
-        tablename = self.db.get_tablename(catalog.tbl_schema, catalog.tbl_name)
-
-        columns = self.db.get_table_columns(tablename)
+        columns = self.db.get_table_columns(catalog.tbl_name, catalog.tbl_schema)
 
         if columns and len(columns) > 0:
             for column in columns:
@@ -346,17 +337,27 @@ class Import():
                 # recuperar content do produto
                 pc = ProductContent.objects.get(pcn_product_id=product, pcn_column_name__iexact=property)
 
-                # recuperar class content
-                # Todas as propriedades que comuns a todas as classes + as propriedades expecificas da classe.
-                cc = ProductClassContent.objects.filter(
-                    Q(pcc_ucd__iexact=p.get('ucd')),
-                    Q(pcc_class=product.prd_class) | Q(pcc_class__isnull=True)).get()
+                try:
+                    # recuperar class content
+                    # Todas as propriedades que comuns a todas as classes + as propriedades expecificas da classe.
+                    cc = ProductClassContent.objects.filter(
+                        Q(pcc_ucd__iexact=p.get('ucd')),
+                        Q(pcc_class=product.prd_class) | Q(pcc_class__isnull=True)).get()
 
-                association = ProductContentAssociation.objects.create(
-                    pca_product=product,
-                    pca_class_content=cc,
-                    pca_product_content=pc
-                )
+                    association = ProductContentAssociation.objects.create(
+                        pca_product=product,
+                        pca_class_content=cc,
+                        pca_product_content=pc
+                    )
+
+                except ProductClassContent.DoesNotExist:
+                    # se nao tiver o ucd na classe nao faz nada
+                    pass
+
+                # Guardar o UCD que foi enviado mesmo que ele nao pertenca a uma classe
+                if p.get('ucd') is not '':
+                    pc.pcn_ucd = p.get('ucd')
+                    pc.save()
 
             except:
                 raise Exception("it was not possible to create association for this column: %s" % property)
@@ -403,14 +404,13 @@ class Import():
 
     # =============================< MAP >=============================
     def register_map(self, data):
-        # Instancia do banco de catalogo
         if not self.db:
             con = CatalogDB()
-            self.db = con.wrapper
+            self.db = con.database
 
-        # Verifica se a tabela existe
-        if not self.db.table_exists(data.get('schema', None), data.get('table')):
-            raise Exception("Table or view  %s does not exist" % data.get('table'))
+        if not self.db.table_exists(data.get('table'), schema=data.get('schema', None)):
+            raise Exception("Table or view  %s.%s does not exist" %
+                            (data.get('schema', None), data.get('table')))
 
         # Recuperar a classe do produto
         cls = self.get_product_class(data.get('class'))
@@ -506,14 +506,13 @@ class Import():
 
     # =============================< MASK >=============================
     def register_mask(self, data):
-        # Instancia do banco de catalogo
         if not self.db:
             con = CatalogDB()
-            self.db = con.wrapper
+            self.db = con.database
 
-        # Verifica se a tabela existe
-        if not self.db.table_exists(data.get('schema', None), data.get('table')):
-            raise Exception("Table or view  %s does not exist" % data.get('table'))
+        if not self.db.table_exists(data.get('table'), schema=data.get('schema', None)):
+            raise Exception("Table or view  %s.%s does not exist" %
+                            (data.get('schema', None), data.get('table')))
 
         # Recuperar a classe do produto
         cls = self.get_product_class(data.get('class'))
