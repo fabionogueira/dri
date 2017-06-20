@@ -2,4 +2,5 @@ bootstrap.json
 build/development/
 build/temp/development/
 build/temp/production/
-
+# Evitar que o visiomatic seja sobrescrito a cada build 
+/frontend/build/production/Target/packages/local/visiomatic/src/visiomatic/dist/
