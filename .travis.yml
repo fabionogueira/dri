@@ -18,13 +18,14 @@ before_install:
   - chmod +x SenchaCmd.sh
   - ./SenchaCmd.sh -q
   - export PATH=~/bin/Sencha/Cmd/6.5.0.180/:$PATH
+  # Run Sencha CMD only for check if working
   - sencha
 
 # command to install dependencies
 install:
-  - cd $TRAVIS_BUILD_DIR
-  - pip install -r api/requirements.txt
-  - pip install -r api/requirements_dev.txt
+  - cd $TRAVIS_BUILD_DIR/api
+  - pip install -r requirements.txt
+  - pip install -r requirements_dev.txt
   - pip install coverage
   - pip install coveralls
   - pip install pep8
@@ -48,3 +49,35 @@ script:
   # Run Tests and generate reports on coveralls
   - coverage run --source=. --omit='*migrations' manage.py test --verbosity=2
   - coveralls
+
+  # Build Sencha Extjs Apps
+  # Checkout to branch
+  - git checkout $TRAVIS_BRANCH
+  - cd $TRAVIS_BUILD_DIR/frontend
+  # Build Apps
+  - cd target
+  - sencha app build production
+  # Fix override visiometic files
+  - cp -r $TRAVIS_BUILD_DIR/frontend/packages/local/visiomatic/src/visiomatic/dist $TRAVIS_BUILD_DIR/frontend/build/production/Target/packages/local/visiomatic/src/visiomatic/
+
+after_success:
+  # Configure git to push files
+  - git config --global user.email "${GH_EMAIL}"
+  - git config --global user.name "${GH_USER}"
+  - git config --global push.default simple
+
+  - git config credential.helper "store --file=.git/credentials"
+  - echo "https://${GH_TOKEN}:@github.com" > .git/credentials
+
+  - git branch
+
+  # Adding Builded files
+  - git status
+  #  - git add -A
+  - git add $TRAVIS_BUILD_DIR/frontend/build
+  - git status
+  - git commit -m 'Travis build [ci skip]'
+
+  - git remote -v
+  - git remote set-url origin https://github.com/$TRAVIS_REPO_SLUG.git
+  - git push
