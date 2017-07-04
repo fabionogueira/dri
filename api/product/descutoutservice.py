@@ -4,7 +4,7 @@ import shutil
 import urllib
 from django.utils import timezone
 from pprint import pprint
-
+import json
 from coadd.models import Release, Tag
 from common.models import Filter
 from product.models import Catalog, Map, Mask, ProductContent, ProductRelease, ProductTag, ProductContentAssociation
@@ -29,7 +29,7 @@ class CutoutJobs:
 
     def __init__(self):
         # TODO substituir os prints por LOG
-        # print("--------- Init ----------")
+        print("--------- Init ----------")
         self.host = settings.CUTOUT_HOST
         self.user = settings.CUTOUT_USER
         self.password = settings.CUTOUT_PASSWORD
@@ -54,7 +54,7 @@ class CutoutJobs:
         Returns a token to create other requests
         Returns: str(token)
         """
-        # print("Create Authetication Token")
+        print("Create Authetication Token")
         # Create Authetication Token
         req = requests.post(
             self.host_token,
@@ -62,19 +62,24 @@ class CutoutJobs:
                 'username': self.user,
                 'password': self.password
             })
-
-        return req.json()['token']
+        try:
+            pprint(req.text)
+            return req.json()['token']
+        except Exception as e:
+            text = req.json()
+            msg = ("Token generation error %s - %s" % (req.status_code, text['message']))
+            raise Exception(msg)
 
     def check_token_status(self, token):
         """
         Check Token status: Check the expiration time for a token
         Returns: bool()
         """
-        # print("Check the expiration time for a token")
+        print("Check the expiration time for a token")
         req = requests.get(
             self.host_token + '?token=' + token)
 
-        # print(req.json()['message'])
+        print(req.json()['message'])
 
         if req.json()['status'].lower() == 'ok':
             return True
@@ -89,7 +94,7 @@ class CutoutJobs:
         req = requests.get(
             self.host_jobs + "?token=" + token + '&jobid=' + jobid)
 
-        # print(req.text)
+        print(req.text)
         data = req.json()
 
         if data['status'] != 'error' and data['job_status'] == 'SUCCESS':
@@ -109,11 +114,11 @@ class CutoutJobs:
         req = requests.delete(
             self.host_jobs + "?token=" + token + '&jobid=' + jobid)
 
-        # print(req.text)
+        print(req.text)
         data = req.json()
 
         if data['status'] != 'error' and data['status'] == 'ok':
-            # print(data['message'])
+            print(data['message'])
             return True
         else:
             return False
@@ -187,25 +192,25 @@ class CutoutJobs:
         return arq
 
     def start_job(self):
-        # print ("Start Job")
+        print ("Start Job")
 
         # print(self.host)
         # Pegar todos os CutoutJobs com status = st (Start)
         cutoutjobs = CutOutJob.objects.filter(cjb_status='st')
 
-        # print("Jobs: %s" % cutoutjobs.count())
+        print("Jobs: %s" % cutoutjobs.count())
 
         # Faz um for para cara job
         for job in cutoutjobs:
-            # print(job.cjb_status)
+            print(job.cjb_status)
 
             product_id = job.cjb_product_id
 
             token = self.generate_token()
 
             # muda Status para Before Submit status
-            if job.cjb_status == 'st':
-                CutOutJob.objects.filter(pk=job.pk).update(cjb_status='bs')
+            # if job.cjb_status == 'st':
+            #     CutOutJob.objects.filter(pk=job.pk).update(cjb_status='bs')
 
             # Recupera os objetos do catalogo
             rows = self.get_catalog_objects(product_id)
@@ -216,12 +221,20 @@ class CutoutJobs:
                 ra.append(float(row['_meta_ra']))
                 dec.append(float(row['_meta_dec']))
 
+
             body = {
                 'token': token,
-                'ra': str(ra),
-                'dec': str(dec),
-                'job_type': job.cjb_job_type
+                'ra': str(ra[0]),
+                'dec': str(dec[0]),
+                'job_type': job.cjb_job_type,
+                # -------------------
+                'tag': 'Y3A1_COADD',
+                'no_blacklist': 'false',
+                'list_only': 'false',
+                'band': 'g,r,i',
+                'email': 'false'
             }
+
             if job.cjb_xsize:
                 body.update({'xsize': job.cjb_xsize})
             if job.cjb_ysize:
@@ -235,31 +248,39 @@ class CutoutJobs:
                 else:
                     body.update({'no_blacklist': 'false'})
 
+            pprint(body)
+
             # Faz o Submit pro serviço do NCSA
             req = requests.post(
                 self.host_jobs, data=body)
 
-            # muda o status pra enviado e inclui o retorno do submit
-            if req.json()['status'] == 'ok':
-                CutOutJob.objects.filter(pk=job.pk).update(cjb_job_id=req.json()['job'])
+            print("----------")
+            try:
+                # muda o status pra enviado e inclui o retorno do submit
+                if req.json()['status'] == 'ok':
+                    CutOutJob.objects.filter(pk=job.pk).update(cjb_job_id=req.json()['job'])
 
-                CutOutJob.objects.filter(pk=job.pk).update(cjb_status='rn')
+                    CutOutJob.objects.filter(pk=job.pk).update(cjb_status='rn')
 
-            else:
-                CutOutJob.objects.filter(pk=job.pk).update(cjb_status='er')
+                else:
+                    CutOutJob.objects.filter(pk=job.pk).update(cjb_status='er')
 
-        return ({"status": "ok"})
+                return ({"status": "ok"})
+            except:
+                msg = ("DES Cutout Service return Error [ %s ] \n %s" % (req.status_code, req.text))
+                print(msg)
+                raise Exception(msg)
 
     def check_job(self):
         """
         Verifica todos os jobs com status running
         """
-        # print("---------- check_job ----------------")
+        print("---------- check_job ----------------")
 
         # Pegar todos os CutoutJobs com status running
         jobs = CutOutJob.objects.filter(cjb_status='rn')
 
-        # print('Count: %s' % jobs.count())
+        print('Count: %s' % jobs.count())
 
         # Faz um for para cara job
         for job in jobs:
@@ -307,16 +328,16 @@ class CutoutJobs:
 
         except OSError:
             return cutout_dir
-            # print("Cutout path already exists: %s" % cutout_dir)
+            print("Cutout path already exists: %s" % cutout_dir)
             # raise
 
     def download_cutouts(self, cutout_job, list_files):
-        # print("----------- download_cutouts -------------------")
+        print("----------- download_cutouts -------------------")
 
         cutout_dir = self.get_cutout_dir(cutout_job)
 
         # Verificar se tem um csv com o nome dos arquivos e as coordenadas
-        # print('Cutout_Dir: %s' % cutout_dir)
+        print('Cutout_Dir: %s' % cutout_dir)
 
         matched_csv = None
 
@@ -360,7 +381,7 @@ class CutoutJobs:
                 # Se o arquivo for csv
                 matched_csv = self.download_file(arq.get('url'), cutout_dir, arq.get('filename'))
 
-                # print("Matched: %s" % matched_csv)
+                print("Matched: %s" % matched_csv)
 
             else:
                 self.download_file(arq.get('url'), cutout_dir, arq.get('filename'))
@@ -395,9 +416,9 @@ class CutoutJobs:
                         pass
 
     def download_file(self, url, cutout_dir, filename):
-        # print("------------- download_file -------------")
-        # print("URL: %s" % url)
-        # print("Filename: %s" % filename)
+        print("------------- download_file -------------")
+        print("URL: %s" % url)
+        print("Filename: %s" % filename)
         file_path = os.path.join(cutout_dir, filename)
 
         if not os.path.exists(file_path):
@@ -406,7 +427,7 @@ class CutoutJobs:
         return file_path
 
     def get_catalog_objects(self, product_id):
-        # print("get_catalog_objects(product_id=%s)" % product_id)
+        print("get_catalog_objects(product_id=%s)" % product_id)
         catalog = Catalog.objects.select_related().get(product_ptr_id=product_id)
         queryset = ProductContentAssociation.objects.select_related().filter(pca_product=product_id)
         serializer = AssociationSerializer(queryset, many=True)
@@ -436,9 +457,10 @@ class CutoutJobs:
                 "_meta_key": key
             }))
 
-        # print("Catalog Objects: %s" % len(raDec))
+        print("Catalog Objects: %s" % len(raDec))
 
         return raDec
+
 
     def get_object_position_key(self, ra, dec):
         """
@@ -492,9 +514,9 @@ class CutoutJobs:
         # To include files
         # req = requests.post('http://descut.cosmology.illinois.edu/api/jobs/', data=body, files=body_files)
 
-        print(req)
-        print(req.text)
-        print(req.json()['job'])
+        # print(req)
+        # print(req.text)
+        # print(req.json()['job'])
 
 
 def sextodec(xyz, delimiter=None):

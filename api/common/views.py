@@ -128,10 +128,13 @@ def teste(request):
     if request.method == 'GET':
         print('Teste---------------------')
 
-        # from product.CutoutJobs import CutoutJobs
-        # cutoutjobs = CutoutJobs()
-        # a = cutoutjobs.check_job()
-        # a = cutoutjobs.start_job()
+        from product.descutoutservice import CutoutJobs
+        cutoutjobs = CutoutJobs()
+        # try:
+        #a = cutoutjobs.check_job()
+        a = cutoutjobs.start_job()
         # a = cutoutjobs.test_api_help()
+        return Response(dict({'teste': 'teste'}))
+        # except Exception as e:
+        #     raise (e)
 
-        return Response(dict({'teste': ''}))
