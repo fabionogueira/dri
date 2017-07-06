@@ -209,8 +209,8 @@ class CutoutJobs:
             token = self.generate_token()
 
             # muda Status para Before Submit status
-            # if job.cjb_status == 'st':
-            #     CutOutJob.objects.filter(pk=job.pk).update(cjb_status='bs')
+            if job.cjb_status == 'st':
+                CutOutJob.objects.filter(pk=job.pk).update(cjb_status='bs')
 
             # Recupera os objetos do catalogo
             rows = self.get_catalog_objects(product_id)
@@ -224,15 +224,15 @@ class CutoutJobs:
 
             body = {
                 'token': token,
-                'ra': str(ra[0]),
-                'dec': str(dec[0]),
+                'ra': str(ra),
+                'dec': str(dec),
                 'job_type': job.cjb_job_type,
                 # -------------------
                 'tag': 'Y3A1_COADD',
-                'no_blacklist': 'false',
-                'list_only': 'false',
-                'band': 'g,r,i',
-                'email': 'false'
+                # 'no_blacklist': 'false',
+                # 'list_only': 'false',
+                # 'band': 'g,r,i',
+                # 'email': 'false'
             }
 
             if job.cjb_xsize:
@@ -401,6 +401,7 @@ class CutoutJobs:
                 for row in spamreader:
                     key = self.get_object_position_key(row.get('RA'), row.get('DEC'))
 
+                    print("Key [%s]" % key)
                     if key in catalog:
                         obj = catalog[key]
 
@@ -410,8 +411,11 @@ class CutoutJobs:
                             cutout.ctt_object_id = obj.get('_meta_id')
                             cutout.ctt_object_ra = obj.get('_meta_ra')
                             cutout.ctt_object_dec = obj.get('_meta_dec')
+                            # TODO salvar tambem o tilename
                             cutout.save()
+                            print('OBJETO ASSOCIADO cutout_id[%s]' % cutout.pk)
                     else:
+                        print('Nao encontrado no catalogo')
                         # TODO nao consegue associar o arquivo com um objeto do catalogo
                         pass
 
